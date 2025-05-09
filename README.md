@@ -41,7 +41,7 @@ pip install -r requirements.txt
 ### Chạy ứng dụng
 
 ```
-python web_app.py
+python app.py
 ```
 
 Mở trình duyệt và truy cập http://127.0.0.1:5000/
