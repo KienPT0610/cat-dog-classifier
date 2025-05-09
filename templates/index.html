@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Phân loại Ảnh</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f5f5f5;
+      color: #333;
+    }
+
+    h1 {
+      color: #2c3e50;
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .container {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+
+    .upload-container {
+      border: 2px dashed #ccc;
+      border-radius: 8px;
+      padding: 30px;
+      text-align: center;
+      margin: 20px 0;
+      cursor: pointer;
+      transition: border-color 0.3s;
+    }
+
+    .upload-container:hover {
+      border-color: #3498db;
+    }
+
+    .upload-container.active {
+      border-color: #2ecc71;
+    }
+
+    #file-input {
+      display: none;
+    }
+
+    .btn {
+      background-color: #3498db;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: background-color 0.3s;
+    }
+
+    .btn:hover {
+      background-color: #2980b9;
+    }
+
+    .btn:disabled {
+      background-color: #95a5a6;
+      cursor: not-allowed;
+    }
+
+    #result {
+      margin-top: 30px;
+      display: none;
+    }
+
+    .result-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+
+    .image-container {
+      flex: 1;
+      min-width: 200px;
+    }
+
+    .image-container img {
+      max-width: 100%;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    }
+
+    .prediction-container {
+      flex: 1;
+      min-width: 300px;
+    }
+
+    .prediction-title {
+      font-size: 24px;
+      margin-bottom: 10px;
+      color: #2c3e50;
+    }
+
+    .prediction-result {
+      font-size: 32px;
+      font-weight: bold;
+      margin-bottom: 20px;
+      color: #16a085;
+    }
+
+    .prediction-confidence {
+      margin-bottom: 20px;
+      font-size: 18px;
+    }
+
+    .progress-bar {
+      height: 10px;
+      background-color: #ecf0f1;
+      border-radius: 5px;
+      margin-bottom: 5px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background-color: #3498db;
+      border-radius: 5px;
+      transition: width 0.5s;
+    }
+
+    .progress-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+
+    .spinner {
+      border: 4px solid rgba(0, 0, 0, 0.1);
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border-left-color: #09f;
+      animation: spin 1s linear infinite;
+      margin: 20px auto;
+      display: none;
+    }
+
+    @keyframes spin {
+      0% {
+        transform: rotate(0deg);
+      }
+
+      100% {
+        transform: rotate(360deg);
+      }
+    }
+
+    .error {
+      color: #e74c3c;
+      text-align: center;
+      margin-top: 20px;
+      font-weight: bold;
+      display: none;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <h1>Phân loại Ảnh với AI sử dụng mạng CNN</h1>
+
+    <div class="upload-container" id="upload-container">
+      <p>Kéo và thả ảnh vào đây hoặc nhấp để chọn ảnh</p>
+      <input type="file" id="file-input" accept="image/png, image/jpeg, image/jpg">
+      <p id="file-name"></p>
+    </div>
+
+    <div style="text-align: center;">
+      <button id="predict-btn" class="btn" disabled>Dự đoán</button>
+    </div>
+
+    <div class="spinner" id="spinner"></div>
+    <div class="error" id="error"></div>
+
+    <div id="result">
+      <div class="result-container">
+        <div class="image-container">
+          <img id="preview-image" src="" alt="Ảnh được tải lên">
+        </div>
+        <div class="prediction-container">
+          <div class="prediction-title">Kết quả phân loại:</div>
+          <div class="prediction-result" id="prediction-class"></div>
+          <div class="prediction-confidence" id="prediction-confidence"></div>
+
+          <div id="all-probabilities"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const uploadContainer = document.getElementById('upload-container');
+      const fileInput = document.getElementById('file-input');
+      const fileName = document.getElementById('file-name');
+      const predictBtn = document.getElementById('predict-btn');
+      const resultDiv = document.getElementById('result');
+      const previewImage = document.getElementById('preview-image');
+      const predictionClass = document.getElementById('prediction-class');
+      const predictionConfidence = document.getElementById('prediction-confidence');
+      const allProbabilities = document.getElementById('all-probabilities');
+      const spinner = document.getElementById('spinner');
+      const errorDiv = document.getElementById('error');
+
+      let selectedFile = null;
+
+      // Xử lý việc kéo và thả
+      uploadContainer.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadContainer.classList.add('active');
+      });
+
+      uploadContainer.addEventListener('dragleave', () => {
+        uploadContainer.classList.remove('active');
+      });
+
+      uploadContainer.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadContainer.classList.remove('active');
+
+        const files = e.dataTransfer.files;
+        if (files.length) {
+          handleFile(files[0]);
+        }
+      });
+
+      // Xử lý việc nhấp để chọn
+      uploadContainer.addEventListener('click', () => {
+        fileInput.click();
+      });
+
+      fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length) {
+          handleFile(e.target.files[0]);
+        }
+      });
+
+      // Xử lý file đã chọn
+      function handleFile(file) {
+        // Kiểm tra loại file
+        const validTypes = ['image/jpeg', 'image/png', 'image/jpg'];
+        if (!validTypes.includes(file.type)) {
+          showError('Chỉ chấp nhận file ảnh .jpg, .jpeg hoặc .png');
+          return;
+        }
+
+        selectedFile = file;
+        fileName.textContent = file.name;
+        predictBtn.disabled = false;
+
+        // Hiển thị xem trước ảnh
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          previewImage.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+
+        // Ẩn kết quả trước đó nếu có
+        resultDiv.style.display = 'none';
+        errorDiv.style.display = 'none';
+      }
+
+      // Xử lý nút dự đoán
+      predictBtn.addEventListener('click', function () {
+        if (!selectedFile) return;
+
+        spinner.style.display = 'block';
+        resultDiv.style.display = 'none';
+        errorDiv.style.display = 'none';
+        predictBtn.disabled = true;
+
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+
+        fetch('/predict', {
+          method: 'POST',
+          body: formData
+        })
+          .then(response => response.json())
+          .then(data => {
+            spinner.style.display = 'none';
+            predictBtn.disabled = false;
+
+            if (data.error) {
+              showError(data.error);
+              return;
+            }
+
+            // Hiển thị kết quả
+            predictionClass.textContent = data.prediction;
+            predictionConfidence.textContent = `Độ tin cậy: ${data.confidence.toFixed(2)}%`;
+
+            // Hiển thị tất cả xác suất
+            allProbabilities.innerHTML = '';
+            for (const [className, probability] of Object.entries(data.probabilities)) {
+              const probDiv = document.createElement('div');
+              probDiv.innerHTML = `
+                            <div class="progress-label">
+                                <span>${className}</span>
+                                <span>${probability.toFixed(2)}%</span>
+                            </div>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: ${probability}%"></div>
+                            </div>
+                        `;
+              allProbabilities.appendChild(probDiv);
+            }
+
+            resultDiv.style.display = 'block';
+          })
+          .catch(error => {
+            spinner.style.display = 'none';
+            predictBtn.disabled = false;
+            showError('Đã xảy ra lỗi khi xử lý yêu cầu của bạn.');
+            console.error('Error:', error);
+          });
+      });
+
+      // Hiển thị lỗi
+      function showError(message) {
+        errorDiv.textContent = message;
+        errorDiv.style.display = 'block';
+      }
+    });
+  </script>
+</body>
+
+</html>
