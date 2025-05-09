@@ -4,7 +4,7 @@
 
 ## Demo
 
-![Demo ứng dụng](demo.gif)
+![Demo ứng dụng](demo.png)
 
 ## Tính năng
 
